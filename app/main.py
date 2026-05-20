@@ -4,9 +4,10 @@ from fastapi import FastAPI, Form, Depends
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db, init_db
-from app.services import save_receipt, get_spending_summary, build_history_context
+from app.services import save_receipt, get_spending_summary, build_history_context, get_frequent_items
 from app.claude_parser import parse_receipt_from_url, answer_query
 from app import whatsapp
+from mcp.jumbo_scraper import match_deals_to_items
 
 
 @asynccontextmanager
@@ -48,6 +49,23 @@ async def whatsapp_webhook(
 
     elif Body.strip().lower() in ("summary", "spending", "history"):
         reply = await get_spending_summary(db, phone_number)
+
+    elif Body.strip().lower() in ("deals", "aanbiedingen", "sales", "on sale"):
+        items = await get_frequent_items(db, phone_number)
+        if not items:
+            reply = "No purchase history yet — send me a receipt first and I'll check deals for your usual items."
+        else:
+            try:
+                matches = await match_deals_to_items(items)
+                if not matches:
+                    reply = "None of your usual items are on deal at Jumbo right now."
+                else:
+                    lines = ["Good news! These items you usually buy are on sale at Jumbo:\n"]
+                    for m in matches:
+                        lines.append(f"- {m['name']}: €{m['price']:.2f}")
+                    reply = "\n".join(lines)
+            except Exception as e:
+                reply = f"Couldn't check Jumbo deals right now. Try again later. ({e})"
 
     elif Body.strip():
         context = await build_history_context(db, phone_number)

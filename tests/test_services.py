@@ -62,9 +62,10 @@ async def test_get_spending_summary_with_receipts(db):
 
     result = await get_spending_summary(db, PHONE)
 
-    assert "Total receipts: 2" in result
-    assert "55.80" in result
-    assert "Trader Joe's" in result
+    assert "2 receipts" in result
+    assert "Eggs" in result
+    assert "Pasta" in result
+    assert "x2" in result
 
 
 @pytest.mark.asyncio
