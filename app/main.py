@@ -1,9 +1,10 @@
 import os
+import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Form, Depends
+from fastapi import FastAPI, Form, Depends, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database import get_db, init_db
+from app.database import get_db, init_db, SessionLocal
 from app.services import save_receipt, get_spending_summary, build_history_context, get_frequent_items
 from app.claude_parser import parse_receipt_from_url, answer_query
 from app import whatsapp
@@ -20,8 +21,24 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Grocery Receipt Tracker", lifespan=lifespan)
 
 
+async def _check_deals_and_reply(phone_number: str):
+    async with SessionLocal() as db:
+        items = await get_frequent_items(db, phone_number)
+    if not items:
+        whatsapp.send_message(to=phone_number, body="No purchase history yet — send me a receipt first and I'll check deals for your usual items.")
+        return
+    try:
+        whatsapp.send_message(to=phone_number, body="Checking deals at Jumbo, AH and Dirk... one moment!")
+        matches = await match_deals_across_stores(items)
+        reply = format_deals_message(matches)
+    except Exception as e:
+        reply = f"Couldn't check deals right now. Try again later. ({e})"
+    whatsapp.send_message(to=phone_number, body=reply)
+
+
 @app.post("/webhook", response_class=PlainTextResponse)
 async def whatsapp_webhook(
+    background_tasks: BackgroundTasks,
     From: str = Form(...),
     Body: str = Form(""),
     NumMedia: int = Form(0),
@@ -29,7 +46,7 @@ async def whatsapp_webhook(
     MediaContentType0: str = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
-    phone_number = From  # e.g. "whatsapp:+1234567890"
+    phone_number = From
     reply = ""
 
     if NumMedia > 0 and MediaUrl0:
@@ -51,15 +68,8 @@ async def whatsapp_webhook(
         reply = await get_spending_summary(db, phone_number)
 
     elif Body.strip().lower() in ("deals", "aanbiedingen", "sales", "on sale"):
-        items = await get_frequent_items(db, phone_number)
-        if not items:
-            reply = "No purchase history yet — send me a receipt first and I'll check deals for your usual items."
-        else:
-            try:
-                matches = await match_deals_across_stores(items)
-                reply = format_deals_message(matches)
-            except Exception as e:
-                reply = f"Couldn't check deals right now. Try again later. ({e})"
+        background_tasks.add_task(_check_deals_and_reply, phone_number)
+        return ""
 
     elif Body.strip():
         context = await build_history_context(db, phone_number)
