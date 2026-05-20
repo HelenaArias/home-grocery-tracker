@@ -60,6 +60,34 @@ async def parse_receipt_from_url(media_url: str, media_content_type: str) -> dic
     return json.loads(raw.strip())
 
 
+async def normalize_item_names(item_names: list[str]) -> dict[str, str]:
+    """Returns a mapping of original name -> generic Dutch product name."""
+    if not item_names:
+        return {}
+    items_text = "\n".join(f"- {n}" for n in item_names)
+    message = await client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=512,
+        system=(
+            "You convert brand-specific grocery item names to short generic Dutch product names. "
+            "Strip brand names, sizes, and packaging. Return ONLY valid JSON: "
+            "{\"original name\": \"generic name\"}. "
+            "Examples: 'Jumbo Scharreleieren M/L 6 stuks' -> 'scharreleieren', "
+            "'JIMMYS PEANUT BUTTER 350G' -> 'pindakaas', 'Coca-Cola Zero 1.5L' -> 'cola'."
+        ),
+        messages=[{"role": "user", "content": f"Normalize these items:\n{items_text}"}],
+    )
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    try:
+        return json.loads(raw.strip())
+    except json.JSONDecodeError:
+        return {name: name for name in item_names}
+
+
 async def answer_query(phone_number: str, question: str, context: str) -> str:
     message = await client.messages.create(
         model="claude-haiku-4-5-20251001",

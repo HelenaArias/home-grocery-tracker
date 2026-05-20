@@ -104,7 +104,7 @@ async def test_webhook_empty_message_returns_help(mock_send, client):
 @pytest.mark.asyncio
 @patch("app.main.whatsapp.send_message")
 @patch("app.main.parse_receipt_from_url", new_callable=AsyncMock)
-@patch("app.main.match_deals_to_items", new_callable=AsyncMock)
+@patch("app.main.match_deals_across_stores", new_callable=AsyncMock)
 async def test_webhook_deals_with_matches(mock_deals, mock_parse, mock_send, client):
     mock_parse.return_value = PARSED_RECEIPT
     await client.post("/webhook", data={
@@ -115,7 +115,7 @@ async def test_webhook_deals_with_matches(mock_deals, mock_parse, mock_send, cli
         "MediaContentType0": "image/jpeg",
     })
     mock_send.reset_mock()
-    mock_deals.return_value = [{"searched_for": "Chicken", "name": "Jumbo Kipfilet 500g", "price": 3.99}]
+    mock_deals.return_value = [{"searched_for": "Chicken", "store": "Jumbo", "name": "Jumbo Kipfilet 500g", "price": 3.99}]
 
     response = await client.post("/webhook", data={
         "From": PHONE,
@@ -131,7 +131,7 @@ async def test_webhook_deals_with_matches(mock_deals, mock_parse, mock_send, cli
 
 @pytest.mark.asyncio
 @patch("app.main.whatsapp.send_message")
-@patch("app.main.match_deals_to_items", new_callable=AsyncMock)
+@patch("app.main.match_deals_across_stores", new_callable=AsyncMock)
 async def test_webhook_deals_no_history(mock_deals, mock_send, client):
     response = await client.post("/webhook", data={
         "From": "whatsapp:+9999999999",

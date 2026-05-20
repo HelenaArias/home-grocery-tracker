@@ -35,12 +35,12 @@ def _extract_jsonld(html: str) -> dict | None:
 def _parse_product(data: dict) -> dict:
     offers = data.get("offers", {})
     return {
+        "store": "Jumbo",
         "name": data.get("name"),
         "sku": data.get("sku"),
         "url": data.get("url") or f"{BASE}/producten/{data.get('sku')}",
         "price": offers.get("lowPrice"),
         "currency": offers.get("priceCurrency", "EUR"),
-        "category": data.get("category"),
     }
 
 
