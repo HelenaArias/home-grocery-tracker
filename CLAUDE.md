@@ -22,6 +22,9 @@ uvicorn app.main:app --reload
 
 # Run with Docker
 docker compose up --build
+
+# Run tests (must use Docker — Python 3.14 on the host lacks greenlet support)
+make test
 ```
 
 ### Expose webhook locally (Twilio requires a public URL)

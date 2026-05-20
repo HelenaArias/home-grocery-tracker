@@ -32,8 +32,10 @@ async def save_receipt(db: AsyncSession, phone_number: str, parsed: dict, media_
         )
         db.add(item)
 
+    item_count = len(parsed.get("items", []))
     await db.commit()
     await db.refresh(receipt)
+    receipt.item_count = item_count
     return receipt
 
 

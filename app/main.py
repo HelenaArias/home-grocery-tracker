@@ -37,7 +37,7 @@ async def whatsapp_webhook(
             receipt = await save_receipt(db, phone_number, parsed, MediaUrl0)
             store = receipt.store_name or "the store"
             total = f"${receipt.total:.2f}" if receipt.total else "unknown total"
-            item_count = len(receipt.items)
+            item_count = receipt.item_count
             reply = (
                 f"Got it! Saved your receipt from {store} — {total} "
                 f"({item_count} item{'s' if item_count != 1 else ''}). "

@@ -24,6 +24,7 @@ async def parse_receipt_from_url(media_url: str, media_content_type: str) -> dic
         response = await http.get(
             media_url,
             auth=(settings.twilio_account_sid, settings.twilio_auth_token),
+            follow_redirects=True,
         )
         response.raise_for_status()
         image_data = base64.standard_b64encode(response.content).decode("utf-8")
@@ -50,7 +51,13 @@ async def parse_receipt_from_url(media_url: str, media_content_type: str) -> dic
         ],
     )
 
-    return json.loads(message.content[0].text)
+    raw = message.content[0].text.strip()
+    print(f"[claude_parser] raw response: {raw}", flush=True)
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip())
 
 
 async def answer_query(phone_number: str, question: str, context: str) -> str:
