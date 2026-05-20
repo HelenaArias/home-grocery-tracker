@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - grocery_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  grocery_data:
