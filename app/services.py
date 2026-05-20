@@ -40,25 +40,44 @@ async def save_receipt(db: AsyncSession, phone_number: str, parsed: dict, media_
 
 
 async def get_spending_summary(db: AsyncSession, phone_number: str) -> str:
-    result = await db.execute(
-        select(func.count(Receipt.id), func.sum(Receipt.total))
-        .where(Receipt.phone_number == phone_number)
+    receipt_ids = await db.execute(
+        select(Receipt.id).where(Receipt.phone_number == phone_number)
     )
-    count, total = result.one()
-    if not count:
+    ids = [r[0] for r in receipt_ids.all()]
+    if not ids:
         return "No receipts recorded yet."
 
-    receipts = await db.execute(
-        select(Receipt).where(Receipt.phone_number == phone_number).order_by(Receipt.created_at.desc()).limit(5)
+    result = await db.execute(
+        select(ReceiptItem.name, func.count(ReceiptItem.id).label("times"))
+        .where(ReceiptItem.receipt_id.in_(ids))
+        .group_by(func.lower(ReceiptItem.name))
+        .order_by(func.count(ReceiptItem.id).desc())
+        .limit(15)
     )
-    recent = receipts.scalars().all()
-    lines = [f"Total receipts: {count}, Total spent: ${total or 0:.2f}\n\nRecent purchases:"]
-    for r in recent:
-        store = r.store_name or "Unknown store"
-        amount = f"${r.total:.2f}" if r.total else "unknown amount"
-        date = r.purchased_at.strftime("%Y-%m-%d") if r.purchased_at else r.created_at.strftime("%Y-%m-%d")
-        lines.append(f"- {date}: {store} — {amount}")
+    rows = result.all()
+
+    lines = [f"Your most bought items ({len(ids)} receipt{'s' if len(ids) != 1 else ''} tracked):\n"]
+    for name, times in rows:
+        lines.append(f"- {name} x{times}")
     return "\n".join(lines)
+
+
+async def get_frequent_items(db: AsyncSession, phone_number: str, limit: int = 20) -> list[str]:
+    receipt_ids = await db.execute(
+        select(Receipt.id).where(Receipt.phone_number == phone_number)
+    )
+    ids = [r[0] for r in receipt_ids.all()]
+    if not ids:
+        return []
+
+    result = await db.execute(
+        select(ReceiptItem.name)
+        .where(ReceiptItem.receipt_id.in_(ids))
+        .group_by(func.lower(ReceiptItem.name))
+        .order_by(func.count(ReceiptItem.id).desc())
+        .limit(limit)
+    )
+    return [row[0] for row in result.all()]
 
 
 async def build_history_context(db: AsyncSession, phone_number: str) -> str:

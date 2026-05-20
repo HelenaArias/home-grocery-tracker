@@ -83,8 +83,8 @@ async def test_webhook_summary_command(mock_parse, mock_send, client):
 
     assert response.status_code == 200
     reply = mock_send.call_args[1]["body"]
-    assert "Total receipts: 1" in reply
-    assert "98.45" in reply
+    assert "1 receipt" in reply
+    assert "Chicken" in reply
 
 
 @pytest.mark.asyncio
@@ -99,6 +99,50 @@ async def test_webhook_empty_message_returns_help(mock_send, client):
     assert response.status_code == 200
     reply = mock_send.call_args[1]["body"]
     assert "Send me a photo" in reply
+
+
+@pytest.mark.asyncio
+@patch("app.main.whatsapp.send_message")
+@patch("app.main.parse_receipt_from_url", new_callable=AsyncMock)
+@patch("app.main.match_deals_to_items", new_callable=AsyncMock)
+async def test_webhook_deals_with_matches(mock_deals, mock_parse, mock_send, client):
+    mock_parse.return_value = PARSED_RECEIPT
+    await client.post("/webhook", data={
+        "From": PHONE,
+        "Body": "",
+        "NumMedia": "1",
+        "MediaUrl0": "https://fake.twilio.com/media/123",
+        "MediaContentType0": "image/jpeg",
+    })
+    mock_send.reset_mock()
+    mock_deals.return_value = [{"searched_for": "Chicken", "name": "Jumbo Kipfilet 500g", "price": 3.99}]
+
+    response = await client.post("/webhook", data={
+        "From": PHONE,
+        "Body": "deals",
+        "NumMedia": "0",
+    })
+
+    assert response.status_code == 200
+    reply = mock_send.call_args[1]["body"]
+    assert "Jumbo Kipfilet 500g" in reply
+    assert "3.99" in reply
+
+
+@pytest.mark.asyncio
+@patch("app.main.whatsapp.send_message")
+@patch("app.main.match_deals_to_items", new_callable=AsyncMock)
+async def test_webhook_deals_no_history(mock_deals, mock_send, client):
+    response = await client.post("/webhook", data={
+        "From": "whatsapp:+9999999999",
+        "Body": "deals",
+        "NumMedia": "0",
+    })
+
+    assert response.status_code == 200
+    reply = mock_send.call_args[1]["body"]
+    assert "send me a receipt" in reply.lower()
+    mock_deals.assert_not_called()
 
 
 @pytest.mark.asyncio
