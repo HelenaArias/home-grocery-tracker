@@ -7,7 +7,7 @@ from app.database import get_db, init_db
 from app.services import save_receipt, get_spending_summary, build_history_context, get_frequent_items
 from app.claude_parser import parse_receipt_from_url, answer_query
 from app import whatsapp
-from mcp.jumbo_scraper import match_deals_to_items
+from mcp.multi_store import match_deals_across_stores, format_deals_message
 
 
 @asynccontextmanager
@@ -56,16 +56,10 @@ async def whatsapp_webhook(
             reply = "No purchase history yet — send me a receipt first and I'll check deals for your usual items."
         else:
             try:
-                matches = await match_deals_to_items(items)
-                if not matches:
-                    reply = "None of your usual items are on deal at Jumbo right now."
-                else:
-                    lines = ["Good news! These items you usually buy are on sale at Jumbo:\n"]
-                    for m in matches:
-                        lines.append(f"- {m['name']}: €{m['price']:.2f}")
-                    reply = "\n".join(lines)
+                matches = await match_deals_across_stores(items)
+                reply = format_deals_message(matches)
             except Exception as e:
-                reply = f"Couldn't check Jumbo deals right now. Try again later. ({e})"
+                reply = f"Couldn't check deals right now. Try again later. ({e})"
 
     elif Body.strip():
         context = await build_history_context(db, phone_number)

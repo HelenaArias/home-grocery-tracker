@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Receipt, ReceiptItem
+from app.claude_parser import normalize_item_names
 
 
 async def save_receipt(db: AsyncSession, phone_number: str, parsed: dict, media_url: str | None) -> Receipt:
@@ -22,17 +23,23 @@ async def save_receipt(db: AsyncSession, phone_number: str, parsed: dict, media_
     db.add(receipt)
     await db.flush()
 
-    for item_data in parsed.get("items", []):
+    items_data = parsed.get("items", [])
+    raw_names = [i.get("name", "Unknown") for i in items_data]
+    normalized = await normalize_item_names(raw_names)
+
+    for item_data in items_data:
+        raw_name = item_data.get("name", "Unknown")
         item = ReceiptItem(
             receipt_id=receipt.id,
-            name=item_data.get("name", "Unknown"),
+            name=raw_name,
+            normalized_name=normalized.get(raw_name),
             quantity=item_data.get("quantity"),
             unit_price=item_data.get("unit_price"),
             total_price=item_data.get("total_price"),
         )
         db.add(item)
 
-    item_count = len(parsed.get("items", []))
+    item_count = len(items_data)
     await db.commit()
     await db.refresh(receipt)
     receipt.item_count = item_count
@@ -71,13 +78,13 @@ async def get_frequent_items(db: AsyncSession, phone_number: str, limit: int = 2
         return []
 
     result = await db.execute(
-        select(ReceiptItem.name)
+        select(ReceiptItem.normalized_name, ReceiptItem.name)
         .where(ReceiptItem.receipt_id.in_(ids))
-        .group_by(func.lower(ReceiptItem.name))
+        .group_by(func.lower(func.coalesce(ReceiptItem.normalized_name, ReceiptItem.name)))
         .order_by(func.count(ReceiptItem.id).desc())
         .limit(limit)
     )
-    return [row[0] for row in result.all()]
+    return [normalized or raw for normalized, raw in result.all()]
 
 
 async def build_history_context(db: AsyncSession, phone_number: str) -> str:

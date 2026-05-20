@@ -27,6 +27,7 @@ class ReceiptItem(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     receipt_id: Mapped[int] = mapped_column(ForeignKey("receipts.id"), index=True)
     name: Mapped[str] = mapped_column(String)
+    normalized_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     quantity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     unit_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     total_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
